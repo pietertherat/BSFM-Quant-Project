@@ -1,0 +1,254 @@
+
+import seaborn
+import matplotlib.pyplot as plt
+import warnings
+import os
+import numpy as np
+import pandas as pd
+import kagglehub
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.linear_model import (LinearRegression, Ridge,
+                                  LogisticRegression, RidgeClassifier)
+from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
+from sklearn.svm import SVR, SVC
+from sklearn.metrics import (mean_squared_error, r2_score,
+                             accuracy_score, precision_score,
+                             recall_score, f1_score, confusion_matrix)
+import xgboost as xgb
+
+warnings.filterwarnings("ignore", message="Ill-conditioned matrix")
+warnings.filterwarnings("ignore", message="Parameters.*use_label_encoder.*")
+
+pd.set_option('display.max_columns', None)
+pd.set_option('display.max_rows', None)
+pd.set_option('display.width', None)
+pd.set_option('display.max_colwidth', None)
+
+dataset_path = kagglehub.dataset_download("tarunpaparaju/apple-aapl-historical-stock-data")
+print("Path to dataset files:", dataset_path)
+
+csv_file_path = None
+for root, dirs, files in os.walk(dataset_path):
+    for file in files:
+        if file.endswith(".csv"):
+            csv_file_path = os.path.join(root, file)
+            break
+    if csv_file_path:
+        break
+
+if not csv_file_path:
+    raise FileNotFoundError("No CSV file found in the downloaded dataset directory.")
+
+
+df = pd.read_csv(csv_file_path)
+print("\n===== First few rows of the downloaded CSV =====")
+print(df.head())
+
+df.columns = df.columns.str.strip()
+
+rename_map = {
+    "Close/Last": "Close",
+}
+df.rename(columns=rename_map, inplace=True)
+
+print("\n===== Columns after stripping & rename =====")
+print(df.columns.tolist())
+
+required_cols = ["Open", "High", "Low", "Close", "Volume"]
+for col in required_cols:
+    if col not in df.columns:
+        raise KeyError(
+            f"Column '{col}' not found. Actual columns: {df.columns.tolist()}\n"
+            "Please update 'rename_map' or your dataset."
+        )
+
+
+for col in required_cols:
+    df[col] = df[col].astype(str).str.replace('[\$,]', '', regex=True)
+    df[col] = pd.to_numeric(df[col], errors='coerce')
+
+df.dropna(subset=required_cols, inplace=True)
+
+
+
+X = df[["Open", "High", "Low", "Volume"]]
+y = df["Close"]
+
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
+
+poly = PolynomialFeatures(degree=2, include_bias=False)
+X_poly_train = poly.fit_transform(X_train)
+X_poly_test = poly.transform(X_test)
+
+reg_models = []
+train_mses, test_mses = [], []
+train_r2s, test_r2s = [], []
+
+#Polynomial Linear Regression
+poly_lin = LinearRegression()
+poly_lin.fit(X_poly_train, y_train)
+
+y_train_pred_lin = poly_lin.predict(X_poly_train)
+y_test_pred_lin = poly_lin.predict(X_poly_test)
+
+reg_models.append("Polynomial Linear")
+train_mses.append(mean_squared_error(y_train, y_train_pred_lin))
+test_mses.append(mean_squared_error(y_test, y_test_pred_lin))
+train_r2s.append(r2_score(y_train, y_train_pred_lin))
+test_r2s.append(r2_score(y_test, y_test_pred_lin))
+
+#Polynomial Ridge Regression
+poly_ridge = Ridge(alpha=10.0)
+poly_ridge.fit(X_poly_train, y_train)
+
+y_train_pred_ridge = poly_ridge.predict(X_poly_train)
+y_test_pred_ridge = poly_ridge.predict(X_poly_test)
+
+reg_models.append("Polynomial Ridge")
+train_mses.append(mean_squared_error(y_train, y_train_pred_ridge))
+test_mses.append(mean_squared_error(y_test, y_test_pred_ridge))
+train_r2s.append(r2_score(y_train, y_train_pred_ridge))
+test_r2s.append(r2_score(y_test, y_test_pred_ridge))
+
+#Random Forest Regressor
+rf_reg = RandomForestRegressor(random_state=42)
+rf_reg.fit(X_train, y_train)
+
+y_train_pred_rf = rf_reg.predict(X_train)
+y_test_pred_rf = rf_reg.predict(X_test)
+
+reg_models.append("Random Forest")
+train_mses.append(mean_squared_error(y_train, y_train_pred_rf))
+test_mses.append(mean_squared_error(y_test, y_test_pred_rf))
+train_r2s.append(r2_score(y_train, y_train_pred_rf))
+test_r2s.append(r2_score(y_test, y_test_pred_rf))
+
+#XGBoost Regressor
+xgb_reg = xgb.XGBRegressor(random_state=42, eval_metric="rmse")
+xgb_reg.fit(X_train, y_train)
+
+y_train_pred_xgb = xgb_reg.predict(X_train)
+y_test_pred_xgb = xgb_reg.predict(X_test)
+
+reg_models.append("XGBoost")
+train_mses.append(mean_squared_error(y_train, y_train_pred_xgb))
+test_mses.append(mean_squared_error(y_test, y_test_pred_xgb))
+train_r2s.append(r2_score(y_train, y_train_pred_xgb))
+test_r2s.append(r2_score(y_test, y_test_pred_xgb))
+
+# 10E. SVM Regressor
+svm_reg = SVR(kernel="rbf")
+svm_reg.fit(X_train, y_train)
+
+y_train_pred_svm = svm_reg.predict(X_train)
+y_test_pred_svm = svm_reg.predict(X_test)
+
+reg_models.append("SVM")
+train_mses.append(mean_squared_error(y_train, y_train_pred_svm))
+test_mses.append(mean_squared_error(y_test, y_test_pred_svm))
+train_r2s.append(r2_score(y_train, y_train_pred_svm))
+test_r2s.append(r2_score(y_test, y_test_pred_svm))
+
+regression_results = pd.DataFrame({
+    "Model": reg_models,
+    "Train MSE": train_mses,
+    "Test MSE": test_mses,
+    "Train R²": train_r2s,
+    "Test R²": test_r2s
+})
+
+print("\n================ Regression Results ================\n")
+print(regression_results)
+print()
+
+
+df["UpDown"] = (df["Close"] > df["Open"]).astype(int)
+
+X_cls = df[["Open", "High", "Low", "Volume"]]
+y_cls = df["UpDown"]
+
+X_cls_train, X_cls_test, y_cls_train, y_cls_test = train_test_split(
+    X_cls, y_cls, test_size=0.2, shuffle=False
+)
+
+X_poly_train_cls = poly.fit_transform(X_cls_train)
+X_poly_test_cls = poly.transform(X_cls_test)
+
+cls_models = []
+accuracies, precisions, recalls, f1s = [], [], [], []
+confusion_matrices = []
+
+#Polynomial Logistic Regression
+poly_log_reg = LogisticRegression(max_iter=500)
+poly_log_reg.fit(X_poly_train_cls, y_cls_train)
+y_cls_pred_log = poly_log_reg.predict(X_poly_test_cls)
+
+cls_models.append("Polynomial Logistic Regression")
+accuracies.append(accuracy_score(y_cls_test, y_cls_pred_log))
+precisions.append(precision_score(y_cls_test, y_cls_pred_log))
+recalls.append(recall_score(y_cls_test, y_cls_pred_log))
+f1s.append(f1_score(y_cls_test, y_cls_pred_log))
+confusion_matrices.append(confusion_matrix(y_cls_test, y_cls_pred_log).tolist())
+
+# Polynomial Ridge Classifier
+poly_ridge_cls = RidgeClassifier(alpha=10.0, max_iter=500)
+poly_ridge_cls.fit(X_poly_train_cls, y_cls_train)
+y_cls_pred_ridge = poly_ridge_cls.predict(X_poly_test_cls)
+
+cls_models.append("Polynomial Ridge Classifier")
+accuracies.append(accuracy_score(y_cls_test, y_cls_pred_ridge))
+precisions.append(precision_score(y_cls_test, y_cls_pred_ridge))
+recalls.append(recall_score(y_cls_test, y_cls_pred_ridge))
+f1s.append(f1_score(y_cls_test, y_cls_pred_ridge))
+confusion_matrices.append(confusion_matrix(y_cls_test, y_cls_pred_ridge).tolist())
+
+# Random Forest Classifier
+rf_cls = RandomForestClassifier(random_state=42)
+rf_cls.fit(X_cls_train, y_cls_train)
+y_cls_pred_rf = rf_cls.predict(X_cls_test)
+
+cls_models.append("Random Forest Classifier")
+accuracies.append(accuracy_score(y_cls_test, y_cls_pred_rf))
+precisions.append(precision_score(y_cls_test, y_cls_pred_rf))
+recalls.append(recall_score(y_cls_test, y_cls_pred_rf))
+f1s.append(f1_score(y_cls_test, y_cls_pred_rf))
+confusion_matrices.append(confusion_matrix(y_cls_test, y_cls_pred_rf).tolist())
+
+#XGBoost Classifier (remove 'use_label_encoder')
+xgb_cls = xgb.XGBClassifier(random_state=42, eval_metric="logloss")
+xgb_cls.fit(X_cls_train, y_cls_train)
+y_cls_pred_xgb = xgb_cls.predict(X_cls_test)
+
+cls_models.append("XGBoost Classifier")
+accuracies.append(accuracy_score(y_cls_test, y_cls_pred_xgb))
+precisions.append(precision_score(y_cls_test, y_cls_pred_xgb))
+recalls.append(recall_score(y_cls_test, y_cls_pred_xgb))
+f1s.append(f1_score(y_cls_test, y_cls_pred_xgb))
+confusion_matrices.append(confusion_matrix(y_cls_test, y_cls_pred_xgb).tolist())
+
+#SVM Classifier
+svm_cls = SVC(kernel="rbf")
+svm_cls.fit(X_cls_train, y_cls_train)
+y_cls_pred_svm = svm_cls.predict(X_cls_test)
+
+cls_models.append("SVM Classifier")
+accuracies.append(accuracy_score(y_cls_test, y_cls_pred_svm))
+precisions.append(precision_score(y_cls_test, y_cls_pred_svm))
+recalls.append(recall_score(y_cls_test, y_cls_pred_svm))
+f1s.append(f1_score(y_cls_test, y_cls_pred_svm))
+confusion_matrices.append(confusion_matrix(y_cls_test, y_cls_pred_svm).tolist())
+
+classification_results = pd.DataFrame({
+    "Model": cls_models,
+    "Accuracy": accuracies,
+    "Precision": precisions,
+    "Recall": recalls,
+    "F1-Score": f1s,
+    "Confusion Matrix": confusion_matrices
+})
+
+print("\n=============== Classification Results ===============\n")
+print(classification_results)
+print()

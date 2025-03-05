@@ -25,7 +25,7 @@ pd.set_option('display.max_rows', None)
 pd.set_option('display.width', None)
 pd.set_option('display.max_colwidth', None)
 
-dataset_path = kagglehub.dataset_download("tarunpaparaju/apple-aapl-historical-stock-data")
+dataset_path = kagglehub.dataset_download("prodzar/stocks-historical-price-data")
 print("Path to dataset files:", dataset_path)
 
 csv_file_path = None
@@ -72,7 +72,7 @@ df.dropna(subset=required_cols, inplace=True)
 
 
 
-X = df[["Open", "High", "Low", "Volume"]]
+X = df[["Open", "High", "Low", "Volume","Dividends","Stock Splits"]]
 y = df["Close"]
 
 
